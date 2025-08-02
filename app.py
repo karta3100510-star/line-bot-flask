@@ -30,6 +30,9 @@ def handle_message(event):
 @app.route("/")
 def index():
     return "LINE Bot 已部署成功！"
-
+    
+@app.route("/healthz")
+def health_check():
+    return "OK", 200
 if __name__ == "__main__":
     app.run()
