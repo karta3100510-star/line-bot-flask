@@ -1,8 +1,8 @@
-flask
-line-bot-sdk==3.3.0
-gunicorn
-yfinance
-requests
-feedparser
-aiohttp==3.8.1
-apscheduler
+flask==2.3.2
+line-bot-sdk==3.0.0
+gunicorn==21.2.0
+yfinance==0.2.40
+requests==2.31.0
+feedparser==6.0.11
+aiohttp==3.8.6
+1xm1==4.9.3
