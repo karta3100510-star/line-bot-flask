@@ -1,3 +1,8 @@
 flask
 line-bot-sdk
 gunicorn
+yfinance
+requests
+bs4
+1xm1
+feedparser
