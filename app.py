@@ -1,112 +1,78 @@
 from flask import Flask, request, abort
-from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
-from linebot.models import (
-    MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction
+from linebot import LineBotSdk
+from linebot.v3.messaging import (
+    Configuration,
+    ApiClient,
+    MessagingApi,
+    ReplyMessageRequest,
+    TextMessage
 )
-import yfinance as yf
+from linebot.v3.webhooks import (
+    WebhookHandler,
+    MessageEvent,
+    TextMessageContent
+)
 import os
 
+# 初始化 Flask
 app = Flask(__name__)
 
-# 使用環境變數讀取 LINE 機器人金鑰
-CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
-CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
+# LINE BOT Token 與 Secret
+channel_access_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "你的長效金鑰")
+channel_secret = os.getenv("LINE_CHANNEL_SECRET", "你的 channel secret")
 
-line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
-handler = WebhookHandler(CHANNEL_SECRET)
+# 初始化 LINE API
+configuration = Configuration(access_token=channel_access_token)
+handler = WebhookHandler(channel_secret)
 
-@app.route("/")
-def home():
-    return "LINE Bot is running."
+# 回覆訊息功能
+def reply_text(reply_token, text):
+    with ApiClient(configuration) as api_client:
+        line_bot_api = MessagingApi(api_client)
+        line_bot_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=reply_token,
+                messages=[TextMessage(text=text)]
+            )
+        )
 
+# 接收 webhook
 @app.route("/callback", methods=["POST"])
 def callback():
-    signature = request.headers["X-Line-Signature"]
+    signature = request.headers.get("X-Line-Signature")
     body = request.get_data(as_text=True)
     try:
         handler.handle(body, signature)
-    except InvalidSignatureError:
+    except Exception as e:
+        print("Error:", e)
         abort(400)
     return "OK"
 
-@handler.add(MessageEvent, message=TextMessage)
+# 處理訊息事件
+@handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
     msg = event.message.text.strip().lower()
 
-    # /test 指令
     if msg == "/test":
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="✅ Bot 運作正常，連線成功")
-        )
-        return
+        reply_text(event.reply_token, "✅ 連線成功")
+    elif msg == "/start":
+        reply_text(event.reply_token, "請輸入美股代碼或輸入：市場摘要、佩羅西、便宜股")
+    elif msg in ["市場摘要"]:
+        reply_text(event.reply_token, "📊 市場摘要功能建構中，敬請期待")
+    elif msg in ["佩羅西"]:
+        reply_text(event.reply_token, "🔍 分析中：佩羅西目前持有與買進標的建構中")
+    elif msg.isalpha() and len(msg) <= 5:
+        reply_text(event.reply_token, f"你輸入的是：{msg.upper()}（稍後將顯示即時股價與簡析）")
+    else:
+        reply_text(event.reply_token, f"你說的是：{event.message.text}")
 
-    # /start 快捷選單
-    if msg == "/start":
-        quick_reply = QuickReply(items=[
-            QuickReplyButton(action=MessageAction(label="市場摘要", text="市場摘要")),
-            QuickReplyButton(action=MessageAction(label="佩羅西持股", text="佩羅西")),
-            QuickReplyButton(action=MessageAction(label="便宜股推薦", text="便宜股")),
-            QuickReplyButton(action=MessageAction(label="查詢個股", text="查詢個股"))
-        ])
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="請選擇功能：", quick_reply=quick_reply)
-        )
-        return
+# Health check endpoint for Render
+@app.route("/healthz")
+def health_check():
+    return "ok", 200
 
-    # 關鍵字回應
-    if "市場摘要" in msg:
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="📈 今日市場摘要功能測試中，稍後將提供完整資訊。")
-        )
-        return
-
-    if "佩羅西" in msg:
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="👩‍⚖️ 正在查詢佩羅西近期持股紀錄...功能測試中。")
-        )
-        return
-
-    if "便宜股" in msg:
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="📉 正在分析低估股票推薦...功能測試中。")
-        )
-        return
-
-    if "查詢個股" in msg:
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="請直接輸入股票代碼（如：AAPL、NVDA）")
-        )
-        return
-
-    # 股票代碼查詢
-    try:
-        stock = yf.Ticker(msg.upper())
-        info = stock.info
-        price = info.get("regularMarketPrice")
-        name = info.get("shortName") or info.get("longName")
-        if price and name:
-            summary = f"📊 {name}（{msg.upper()}）\n目前價格：${price}\n\n*更多資訊與評級分析功能將持續更新*"
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text=summary)
-            )
-            return
-    except Exception as e:
-        print("yfinance error:", e)
-
-    # 預設回應（echo）
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=f"你說的是：{event.message.text}")
-    )
-
+# 主程式入口
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
+
 
