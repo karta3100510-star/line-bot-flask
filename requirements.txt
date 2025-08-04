@@ -3,5 +3,4 @@ line-bot-sdk
 gunicorn
 yfinance
 requests
-1xm1
 feedparser
