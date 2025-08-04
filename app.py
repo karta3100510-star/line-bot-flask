@@ -68,11 +68,10 @@ def handle_message(event):
 # === 自動推播任務：每日中午 12 點推送市場摘要 ===
 def send_daily_summary():
     try:
-        message = f"📊 每日市場摘要
-目前建構中（{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}）"
+        message = f"📊 每日市場摘要\n目前建構中（{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}）"
         line_bot_api.push_message(USER_ID, TextSendMessage(text=message))
     except Exception as e:
-        print("推播錯誤：", str(e))
+        print("推播錯誤 =>", str(e))
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(send_daily_summary, 'cron', hour=12, minute=0)
