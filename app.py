@@ -1,54 +1,112 @@
 from flask import Flask, request, abort
-import requests
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError
+from linebot.models import (
+    MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction
+)
+import yfinance as yf
 import os
 
 app = Flask(__name__)
 
-LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN") or "YOUR_CHANNEL_ACCESS_TOKEN"
-LINE_REPLY_ENDPOINT = 'https://api.line.me/v2/bot/message/reply'
-HEADERS = {
-    "Content-Type": "application/json",
-    "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
-}
+# 使用環境變數讀取 LINE 機器人金鑰
+CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
+CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
 
-def handle_stock_query(text):
-    if text.lower() in ["pltr", "nvda", "aapl"]:
-        return f"你查詢的是：{text}\n（暫為 echo 模式，稍後回覆股價與摘要）"
-    return None
+line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
+handler = WebhookHandler(CHANNEL_SECRET)
 
-def handle_market_summary():
-    return "市場摘要功能建構中，將於稍後啟用。"
+@app.route("/")
+def home():
+    return "LINE Bot is running."
 
-@app.route("/callback", methods=['POST'])
+@app.route("/callback", methods=["POST"])
 def callback():
+    signature = request.headers["X-Line-Signature"]
+    body = request.get_data(as_text=True)
     try:
-        body = request.get_json()
-        for event in body['events']:
-            if event['type'] != 'message':
-                continue
-            reply_token = event['replyToken']
-            user_msg = event['message']['text'].strip()
-
-            if user_msg == "/test":
-                reply = "✅ LINE Bot 測試成功！"
-            elif user_msg == "/start":
-                reply = "請選擇操作：\n1️⃣ 查詢股票（輸入代碼）\n2️⃣ 市場摘要（輸入：市場摘要）"
-            elif user_msg == "市場摘要":
-                reply = handle_market_summary()
-            else:
-                stock_response = handle_stock_query(user_msg)
-                reply = stock_response or f"你說的是：{user_msg}"
-
-            data = {
-                "replyToken": reply_token,
-                "messages": [{"type": "text", "text": reply}]
-            }
-            requests.post(LINE_REPLY_ENDPOINT, headers=HEADERS, json=data)
-
-        return 'OK'
-    except Exception as e:
-        print("Error:", e)
+        handler.handle(body, signature)
+    except InvalidSignatureError:
         abort(400)
+    return "OK"
+
+@handler.add(MessageEvent, message=TextMessage)
+def handle_message(event):
+    msg = event.message.text.strip().lower()
+
+    # /test 指令
+    if msg == "/test":
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="✅ Bot 運作正常，連線成功")
+        )
+        return
+
+    # /start 快捷選單
+    if msg == "/start":
+        quick_reply = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label="市場摘要", text="市場摘要")),
+            QuickReplyButton(action=MessageAction(label="佩羅西持股", text="佩羅西")),
+            QuickReplyButton(action=MessageAction(label="便宜股推薦", text="便宜股")),
+            QuickReplyButton(action=MessageAction(label="查詢個股", text="查詢個股"))
+        ])
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="請選擇功能：", quick_reply=quick_reply)
+        )
+        return
+
+    # 關鍵字回應
+    if "市場摘要" in msg:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="📈 今日市場摘要功能測試中，稍後將提供完整資訊。")
+        )
+        return
+
+    if "佩羅西" in msg:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="👩‍⚖️ 正在查詢佩羅西近期持股紀錄...功能測試中。")
+        )
+        return
+
+    if "便宜股" in msg:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="📉 正在分析低估股票推薦...功能測試中。")
+        )
+        return
+
+    if "查詢個股" in msg:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="請直接輸入股票代碼（如：AAPL、NVDA）")
+        )
+        return
+
+    # 股票代碼查詢
+    try:
+        stock = yf.Ticker(msg.upper())
+        info = stock.info
+        price = info.get("regularMarketPrice")
+        name = info.get("shortName") or info.get("longName")
+        if price and name:
+            summary = f"📊 {name}（{msg.upper()}）\n目前價格：${price}\n\n*更多資訊與評級分析功能將持續更新*"
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=summary)
+            )
+            return
+    except Exception as e:
+        print("yfinance error:", e)
+
+    # 預設回應（echo）
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=f"你說的是：{event.message.text}")
+    )
 
 if __name__ == "__main__":
     app.run()
+
