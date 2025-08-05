@@ -4,5 +4,5 @@ line-bot-sdk
 yfinance
 apscheduler
 requests
-
+gunicorn
 
