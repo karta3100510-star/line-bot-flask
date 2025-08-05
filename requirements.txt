@@ -1,7 +1,8 @@
-Flask==2.3.2
-line-bot-sdk==3.7.0
-gunicorn==21.2.0
-yfinance==0.2.37
-apscheduler==3.10.4
+Flask
+python-dotenv
+line-bot-sdk
+yfinance
+apscheduler
+requests
 
 
