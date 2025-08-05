@@ -23,6 +23,11 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 def index():
     return "LINE Bot 已啟動", 200
 
+# 健康檢查用 (Render 需要)
+@app.route("/healthz", methods=["GET"])
+def healthz():
+    return "ok", 200
+
 # 接收 LINE 訊息
 @app.route("/callback", methods=["POST"])
 def callback():
@@ -121,4 +126,5 @@ scheduler.start()
 # Run app
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
 
