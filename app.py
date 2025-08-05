@@ -7,12 +7,11 @@ from linebot.models import (
 )
 import os
 import yfinance as yf
-import datetime
 
 # 設定你的 LINE Bot 金鑰
-LINE_CHANNEL_ACCESS_TOKEN = 'YOUR_CHANNEL_ACCESS_TOKEN'
-LINE_CHANNEL_SECRET = 'YOUR_CHANNEL_SECRET'
-USER_ID = 'YOUR_USER_ID'  # 你的 LINE 使用者 ID，用於推播測試
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "你的_ACCESS_TOKEN")
+LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "你的_SECRET")
+USER_ID = os.getenv("USER_ID", "你的_LINE_USER_ID")
 
 app = Flask(__name__)
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
@@ -22,11 +21,6 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 @app.route("/", methods=["GET"])
 def index():
     return "LINE Bot 已啟動", 200
-
-# 健康檢查用 (Render 需要)
-@app.route("/healthz", methods=["GET"])
-def healthz():
-    return "ok", 200
 
 # 接收 LINE 訊息
 @app.route("/callback", methods=["POST"])
@@ -120,11 +114,13 @@ NVDA、MSFT、AVGO、PLTR""")
 
 # 啟動排程
 scheduler = BackgroundScheduler()
-scheduler.add_job(daily_push, "cron", hour=12, minute=0)  # 台灣時間中午 12:00
+scheduler.add_job(daily_push, "cron", hour=12, minute=0)
 scheduler.start()
 
-# Run app
+# 執行應用
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
+
 
 
