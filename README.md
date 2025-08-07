@@ -16,6 +16,12 @@
 1. 安装依赖: `pip install -r requirements.txt`
 2. 在部署平台设置环境变量：`LINE_CHANNEL_SECRET` & `LINE_CHANNEL_ACCESS_TOKEN`
 3. 运行: `gunicorn app:app`
+4. ## 使用步骤
+
+- 用户首次与 Bot 交互（发送任意消息或 `/social`）即自动订阅。
+- 系统会在每天 12:00 自动推送市场摘要给所有订阅者。
+- 如需退订，目前可联系管理员进行清理 `data/subscribers.json`。
+
 
 ## 目录结构
 ├── app.py
