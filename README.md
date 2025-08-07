@@ -18,3 +18,18 @@
 3. 运行: `gunicorn app:app`
 
 ## 目录结构
+├── app.py
+├── config.py
+├── analyzer.py
+├── Procfile
+├── README.md
+├── requirements.txt
+├── runtime.txt
+├── data
+│ ├── analysis.json
+│ └── posts.json
+└── utils
+├── notifier.py
+├── scheduler.py
+├── social_crawler.py
+└── storage.py
