@@ -1,5 +1,5 @@
-from flask import Flask, request, abort
 import os
+from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from utils.scheduler import scheduler
@@ -10,8 +10,7 @@ import config
 
 app = Flask(__name__)
 
-# Initialize scheduler
-scheduler.init_app(app)
+# 直接启动 APScheduler，不再调用 init_app()
 scheduler.start()
 
 @app.route("/callback", methods=['POST'])
