@@ -2,6 +2,8 @@ import os
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
+from linebot.models import MessageEvent, TextMessage, TextSendMessage
+
 from utils.scheduler import scheduler
 from utils.social_crawler import crawl_social_data
 from analyzer import analyze_data
@@ -10,23 +12,38 @@ import config
 
 app = Flask(__name__)
 
-# 直接启动 APScheduler，不再调用 init_app()
+# 初始化 Line SDK
+line_bot_api = LineBotApi(config.LINE_CHANNEL_ACCESS_TOKEN)
+handler = WebhookHandler(config.LINE_CHANNEL_SECRET)
+
+# 启动排程
 scheduler.start()
 
 @app.route("/callback", methods=['POST'])
 def callback():
-    signature = request.headers.get('X-Line-Signature', '')
+    signature = request.headers.get("X-Line-Signature", "")
     body = request.get_data(as_text=True)
+
+    # 记录一下 body，方便调试
+    print("Request body:", body)
+
     try:
-        # TODO: Handle LINE webhook events here
-        pass
+        handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
-    return 'OK'
+    return "OK"
+
+# 注册一个简单的文字消息处理函数
+@handler.add(MessageEvent, message=TextMessage)
+def handle_message(event: MessageEvent):
+    incoming = event.message.text
+    print(f"Received message: {incoming}")       # 调试用
+    reply = TextSendMessage(text=f"You said: {incoming}")
+    line_bot_api.reply_message(event.reply_token, reply)
 
 @app.route("/healthz", methods=['GET'])
 def health_check():
-    return 'OK'
+    return "OK"
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
