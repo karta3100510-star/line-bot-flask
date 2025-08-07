@@ -36,10 +36,24 @@ def callback():
 # 注册一个简单的文字消息处理函数
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event: MessageEvent):
-    incoming = event.message.text
-    print(f"Received message: {incoming}")       # 调试用
-    reply = TextSendMessage(text=f"You said: {incoming}")
-    line_bot_api.reply_message(event.reply_token, reply)
+    user_id = event.source.user_id
+    incoming = event.message.text.strip()
+
+    # 1. 社群爬取命令
+    if incoming.lower() == '/social':
+        results = crawl_social_data()
+        if not results:
+            reply = "目前尚未抓取到任何社群内容。"
+        else:
+            lines = [f"{r['url']} → {r['data']}" for r in results]
+            # 如果结果过多，可截断或分批发送
+            reply = "\n".join(lines[:10])
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+        return
+
+    # 其余已有逻辑——先保留回声，后续再接其它命令
+    print(f"Fallback echo for: {incoming}")
+    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"You said: {incoming}"))
 
 @app.route("/healthz", methods=['GET'])
 def health_check():
