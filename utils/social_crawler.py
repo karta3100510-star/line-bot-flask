@@ -1,26 +1,55 @@
+# utils/social_crawler.py
+
 import requests
 from bs4 import BeautifulSoup
 
 SOCIAL_URLS = [
-    "https://www.facebook.com/share/16gt5rCZJD/",
-    "https://www.facebook.com/share/16MZC8mAGg/",
-    "https://www.facebook.com/share/1D9kKbnNDs/",
-    "https://substack.com/@unclestocknotes?fbclid=IwQ0xDSwL_ywZjbGNrAv_K_2V4dG4DYWVtAjExAAEeM386cpgh4Be8yvRY7paGPJPr6YX3oK0cFcbUj4kw4FSXEGWBQ3TEtT1DB0c_aem_x56xFJ1DTptDsknD1lnRLg",
-    "https://www.facebook.com/share/1CXEkxxxQY/",
-    "https://substack.com/@skilleddriver?utm_source=user-menu&fbclid=IwQ0xDSwL_y0hjbGNrAv_LRGV4dG4DYWVtAjExAAEeo6uz3zPo-Pq6p3gRg9vYJg3hKQNjEfFGPL_cuiNz4TkPtXpOE5OX85yUxwA_aem_AD-OndynIRmqu0f6apISHw",
-    "https://www.facebook.com/share/1HhqEJJJqb/",
-    "https://www.facebook.com/share/16jsPApAxC/"
+    # 你的各条链接……
 ]
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+}
+
+def fetch_facebook(url):
+    # 改用 m.facebook.com
+    mobile = url.replace("www.facebook.com", "m.facebook.com")
+    resp = requests.get(mobile, headers=HEADERS, timeout=10)
+    soup = BeautifulSoup(resp.text, "html.parser")
+    og = soup.find("meta", property="og:description")
+    if og and og.get("content"):
+        return og["content"]
+    # fallback：取正文 snippet
+    text = soup.get_text(separator=" ", strip=True)
+    return text[:200] + "…"
+
+def fetch_substack(url):
+    # 试着读 RSS
+    feed_url = url.rstrip("/") + "/feed"
+    resp = requests.get(feed_url, headers=HEADERS, timeout=10)
+    soup = BeautifulSoup(resp.text, "xml")
+    item = soup.find("item")
+    if item and item.title:
+        return item.title.string
+    return "No recent post."
 
 def crawl_social_data():
     results = []
     for url in SOCIAL_URLS:
         try:
-            resp = requests.get(url, timeout=10)
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            title = soup.title.string if soup.title else ''
-            # Placeholder: extract posts list if possible
-            results.append({'url': url, 'data': title})
+            if "facebook.com" in url:
+                summary = fetch_facebook(url)
+            elif "substack.com" in url:
+                summary = fetch_substack(url)
+            else:
+                # 通用处理
+                resp = requests.get(url, headers=HEADERS, timeout=10)
+                soup = BeautifulSoup(resp.text, "html.parser")
+                og = soup.find("meta", property="og:description")
+                summary = og["content"] if og and og.get("content") else soup.title.string or ""
+            results.append({"url": url, "data": summary})
         except Exception as e:
             print(f"Error crawling {url}: {e}")
+            results.append({"url": url, "data": "[抓取失败]"})
+
     return results
