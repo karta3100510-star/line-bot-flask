@@ -1,16 +1,12 @@
-# utils/scheduler.py
 from apscheduler.schedulers.background import BackgroundScheduler
-from linebot.models import TextSendMessage
-import config
+from utils.social_crawler import crawl_social_data
+from analyzer import analyze_data
+from utils.notifier import send_daily_summary
 
-def daily_market_summary(line_bot_api):
-    msg = TextSendMessage(text="📊 每日市場摘要\n\n🔔 AI 與晶片為今日重點")
-    line_bot_api.push_message(config.USER_ID, msg)
+scheduler = BackgroundScheduler()
 
-def setup_scheduler(line_bot_api):
-    sched = BackgroundScheduler()
-    # 設定每天台灣時間 12:00 執行
-    sched.add_job(lambda: daily_market_summary(line_bot_api),
-                  "cron", hour=12, minute=0)
-    sched.start()
-    return sched
+# Social crawl and data analysis every 1 hour
+scheduler.add_job(analyze_data, 'interval', hours=1, id='crawl_and_analyze')
+
+# Daily summary at 12:00
+scheduler.add_job(send_daily_summary, 'cron', hour=12, minute=0, id='daily_summary')
