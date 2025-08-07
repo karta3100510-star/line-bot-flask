@@ -1,8 +1,8 @@
-Flask
-python-dotenv
+flask
 line-bot-sdk
-yfinance
 apscheduler
-requests
 gunicorn
-
+requests
+beautifulsoup4
+yfinance
+pandas
