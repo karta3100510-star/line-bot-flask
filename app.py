@@ -1,10 +1,12 @@
 from flask import Flask, request, abort
+import os
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from utils.scheduler import scheduler
 from utils.social_crawler import crawl_social_data
 from analyzer import analyze_data
 from utils.notifier import send_daily_summary
+import config
 
 app = Flask(__name__)
 
