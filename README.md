@@ -1,7 +1,9 @@
-# 股票追踪与筛选工具 (v6)
+# 股票追踪与筛选工具 (v7)
+
+## 修复
+- 移除对 `FlaskAPScheduler.init_app` 的调用，改为使用 `BackgroundScheduler.start()` 启动排程。
 
 ## 功能概览
-- 移除 dotenv 依赖，使用环境变量便捷读取
 - 每小时抓取并分析社群来源 (共 8 条链接)
 - 自动加入超过2次转发来源
 - 抽取帖子中的可能股票代号
@@ -12,27 +14,7 @@
 
 ## 安装与运行
 1. 安装依赖: `pip install -r requirements.txt`
-2. 在 Render 或其他平台的 Dashboard 设置环境变量:
-   - LINE_CHANNEL_SECRET
-   - LINE_CHANNEL_ACCESS_TOKEN
+2. 在部署平台设置环境变量：`LINE_CHANNEL_SECRET` & `LINE_CHANNEL_ACCESS_TOKEN`
 3. 运行: `gunicorn app:app`
 
 ## 目录结构
-```
-.
-├── app.py
-├── config.py
-├── analyzer.py
-├── Procfile
-├── README.md
-├── requirements.txt
-├── runtime.txt
-├── data
-│   ├── analysis.json
-│   └── posts.json
-└── utils
-    ├── notifier.py
-    ├── scheduler.py
-    ├── social_crawler.py
-    └── storage.py
-```
