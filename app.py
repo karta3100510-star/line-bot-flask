@@ -6,6 +6,7 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
 from utils.scheduler import scheduler
 from utils.social_crawler import crawl_social_data
+from utils.subscriber import add_subscriber
 from analyzer import analyze_data
 from utils.notifier import send_daily_summary
 import config
@@ -37,6 +38,8 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event: MessageEvent):
     user_id = event.source.user_id
+    # 1) 自动记录为订阅者
+    add_subscriber(user_id)
     incoming = event.message.text.strip()
 
     # 1. 社群爬取命令
