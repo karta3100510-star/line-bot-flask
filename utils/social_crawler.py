@@ -4,7 +4,14 @@ import requests
 from bs4 import BeautifulSoup
 
 SOCIAL_URLS = [
-    # 你的各条链接……
+   "https://www.facebook.com/share/16gt5rCZJD/",
+    "https://www.facebook.com/share/16MZC8mAGg/",
+    "https://www.facebook.com/share/1D9kKbnNDs/",
+    "https://substack.com/@unclestocknotes?...",
+    "https://www.facebook.com/share/1CXEkxxxQY/",
+    "https://substack.com/@skilleddriver?...",
+    "https://www.facebook.com/share/1HhqEJJJqb/",
+    "https://www.facebook.com/share/16jsPApAxC/"
 ]
 
 HEADERS = {
