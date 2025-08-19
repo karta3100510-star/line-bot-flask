@@ -1,7 +1,7 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from analyzer import analyze_data
-from utils.notifier import send_daily_summary
+from utils.social_crawler import crawl_social_data
 
-scheduler = BackgroundScheduler()
-scheduler.add_job(analyze_data, 'interval', hours=1, id='crawl_and_analyze')
-scheduler.add_job(send_daily_summary, 'cron', hour=12, minute=0, id='daily_summary')
+def init_scheduler():
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(crawl_social_data, 'interval', hours=1)
+    scheduler.start()
