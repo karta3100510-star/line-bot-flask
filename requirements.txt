@@ -1,10 +1,8 @@
-Flask==2.3.3
+flask==2.3.3
 line-bot-sdk==3.4.0
-yfinance==0.2.37
-pandas==2.1.4
-setuptools>=65.5.0
-wheel
-cython
-requests
 apscheduler==3.10.4
+yfinance==0.2.36
+requests==2.31.0
 beautifulsoup4==4.12.2
+feedparser==6.0.10
+
