@@ -1,62 +1,43 @@
-# utils/social_crawler.py
-
-import requests
+import os, requests
 from bs4 import BeautifulSoup
 
-SOCIAL_URLS = [
-   "https://www.facebook.com/share/16gt5rCZJD/",
-    "https://www.facebook.com/share/16MZC8mAGg/",
-    "https://www.facebook.com/share/1D9kKbnNDs/",
-    "https://substack.com/@unclestocknotes?...",
-    "https://www.facebook.com/share/1CXEkxxxQY/",
-    "https://substack.com/@skilleddriver?...",
-    "https://www.facebook.com/share/1HhqEJJJqb/",
-    "https://www.facebook.com/share/16jsPApAxC/"
+FB_TOKEN = os.environ.get("FB_PAGE_TOKEN")
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+
+SOCIAL_CONFIG = [
+    {"type": "facebook", "page_id": "16gt5rCZJD"},
+    {"type": "substack", "handle": "unclestocknotes"}
 ]
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-}
+def fetch_facebook(page_id):
+    url = f"https://graph.facebook.com/v17.0/{page_id}/posts"
+    r = requests.get(url, params={
+        "access_token": FB_TOKEN,
+        "fields": "message,created_time,permalink_url",
+        "limit": 1
+    })
+    data = r.json().get("data", [])
+    if not data:
+        return "No posts"
+    return data[0].get("message", "")[:200]
 
-def fetch_facebook(url):
-    # 改用 m.facebook.com
-    mobile = url.replace("www.facebook.com", "m.facebook.com")
-    resp = requests.get(mobile, headers=HEADERS, timeout=10)
-    soup = BeautifulSoup(resp.text, "html.parser")
-    og = soup.find("meta", property="og:description")
-    if og and og.get("content"):
-        return og["content"]
-    # fallback：取正文 snippet
-    text = soup.get_text(separator=" ", strip=True)
-    return text[:200] + "…"
-
-def fetch_substack(url):
-    # 试着读 RSS
-    feed_url = url.rstrip("/") + "/feed"
-    resp = requests.get(feed_url, headers=HEADERS, timeout=10)
-    soup = BeautifulSoup(resp.text, "xml")
+def fetch_substack(handle):
+    url = f"https://{handle}.substack.com/feed"
+    r = requests.get(url, headers=HEADERS, timeout=10)
+    soup = BeautifulSoup(r.text, "xml")
     item = soup.find("item")
-    if item and item.title:
-        return item.title.string
-    return "No recent post."
+    return item.title.string if item and item.title else "No post"
 
 def crawl_social_data():
     results = []
-    for url in SOCIAL_URLS:
+    for cfg in SOCIAL_CONFIG:
         try:
-            if "facebook.com" in url:
-                summary = fetch_facebook(url)
-            elif "substack.com" in url:
-                summary = fetch_substack(url)
-            else:
-                # 通用处理
-                resp = requests.get(url, headers=HEADERS, timeout=10)
-                soup = BeautifulSoup(resp.text, "html.parser")
-                og = soup.find("meta", property="og:description")
-                summary = og["content"] if og and og.get("content") else soup.title.string or ""
-            results.append({"url": url, "data": summary})
+            if cfg["type"] == "facebook":
+                content = fetch_facebook(cfg["page_id"])
+                results.append({"source": f"Facebook {cfg['page_id']}", "data": content})
+            elif cfg["type"] == "substack":
+                content = fetch_substack(cfg["handle"])
+                results.append({"source": f"Substack {cfg['handle']}", "data": content})
         except Exception as e:
-            print(f"Error crawling {url}: {e}")
-            results.append({"url": url, "data": "[抓取失败]"})
-
+            results.append({"source": cfg.get("page_id") or cfg.get("handle"), "data": f"[抓取失敗: {e}]"})
     return results
