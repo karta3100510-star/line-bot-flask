@@ -3,10 +3,10 @@ from linebot.v3 import WebhookHandler
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 import os
+from utils.scheduler import init_scheduler
 
 app = Flask(__name__)
 
-# 設定 LINE 憑證
 channel_secret = os.getenv("LINE_CHANNEL_SECRET")
 channel_access_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 if not channel_secret or not channel_access_token:
@@ -14,6 +14,8 @@ if not channel_secret or not channel_access_token:
 
 configuration = Configuration(access_token=channel_access_token)
 handler = WebhookHandler(channel_secret)
+
+init_scheduler()
 
 @app.route("/healthz", methods=["GET"])
 def healthz():
