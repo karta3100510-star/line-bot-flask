@@ -6,3 +6,5 @@ setuptools>=65.5.0
 wheel
 cython
 requests
+apscheduler==3.10.4
+beautifulsoup4==4.12.2
