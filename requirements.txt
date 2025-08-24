@@ -1,8 +1,8 @@
-flask
-line-bot-sdk
-apscheduler
-gunicorn
-requests
-beautifulsoup4
-yfinance
-pandas
+flask>=3.1.0
+line-bot-sdk>=3.18.1
+apscheduler>=3.10.4
+gunicorn>=22.0.0
+requests>=2.32.3
+beautifulsoup4>=4.12.3
+yfinance>=0.2.52
+pandas>=2.2.2
