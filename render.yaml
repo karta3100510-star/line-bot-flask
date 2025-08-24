@@ -2,7 +2,17 @@ services:
   - type: web
     name: stock-tracker-bot
     runtime: python
-    buildCommand: pip install -r requirements.txt && python -m pip show gunicorn || echo 'gunicorn not installed' && python -c "import sys; print('Python:', sys.version)"
+    buildCommand: >
+      set -e;
+      echo "PWD: $(pwd)";
+      ls -la;
+      echo "---- requirements.txt ----";
+      cat requirements.txt || true;
+      python -V;
+      pip -V;
+      pip install -r requirements.txt;
+      echo "---- gunicorn show ----";
+      python -m pip show gunicorn || true
     startCommand: python -m gunicorn app:app
     envVars:
       - key: LINE_CHANNEL_ACCESS_TOKEN
