@@ -1,9 +1,7 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from utils.social_crawler import crawl_social_data
+from analyzer import analyze_data
+from utils.notifier import send_daily_summary
 
 scheduler = BackgroundScheduler()
-
-@scheduler.scheduled_job("interval", hours=1)
-def analyze_data():
-    print("[排程任務] 每小時執行抓取社群資料")
-    crawl_social_data()
+scheduler.add_job(analyze_data, 'interval', hours=1, id='crawl_and_analyze')
+scheduler.add_job(send_daily_summary, 'cron', hour=12, minute=0, id='daily_summary')
