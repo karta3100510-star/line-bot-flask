@@ -1,13 +1,15 @@
 import os, re, json, requests
 from datetime import datetime
+from urllib.parse import urlparse, parse_qs
 from bs4 import BeautifulSoup
 from analyzer import analyze_text
 
 FB_TOKEN = os.environ.get("FB_PAGE_TOKEN")
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
+# 你可以把來源填成 share ID、數字 Page ID、或 page 名稱貼文 URL
 SOCIAL_CONFIG = [
-    {"type": "facebook", "page_id": "103865129162015"},
+    {"type": "facebook", "page_id": "16gt5rCZJD"},  # 支援 share ID：會自動解析為數字 Page ID
     {"type": "substack", "handle": "unclestocknotes"}
 ]
 
@@ -22,10 +24,86 @@ def _parse_xml_with_fallback(xml_text: str) -> BeautifulSoup:
             continue
     return BeautifulSoup(xml_text, "html.parser")
 
-def fetch_facebook_posts(page_id: str, limit: int = 2):
-    if not page_id.isdigit():
-        return [], f"Invalid page_id '{page_id}'. Use numeric Facebook Page ID."
+def _resolve_share_id_to_final_url(share_id: str) -> str:
+    try:
+        url = f"https://www.facebook.com/share/{share_id}/"
+        r = requests.get(url, headers=HEADERS, timeout=10, allow_redirects=True)
+        return r.url
+    except Exception:
+        return ""
 
+def _extract_page_id_from_url(final_url: str) -> str:
+    try:
+        if not final_url:
+            return ""
+        u = urlparse(final_url)
+        qs = parse_qs(u.query)
+        if "id" in qs and qs["id"]:
+            pid = qs["id"][0]
+            if pid.isdigit():
+                return pid
+        parts = [p for p in u.path.split('/') if p]
+        if "posts" in parts:
+            idx = parts.index("posts")
+            if idx + 1 < len(parts):
+                post_id = parts[idx + 1]
+                page_id = _graph_post_to_page_id(post_id)
+                if page_id:
+                    return page_id
+        return ""
+    except Exception:
+        return ""
+
+def _graph_lookup_og_object_id(url: str) -> str:
+    try:
+        resp = requests.get(
+            "https://graph.facebook.com/v17.0/",
+            params={"id": url, "fields": "og_object{id}", "access_token": FB_TOKEN},
+            timeout=10
+        )
+        data = resp.json()
+        ogid = (((data or {}).get("og_object") or {}).get("id")) or ""
+        if "_" in ogid:
+            return ogid.split("_")[0]
+        return ""
+    except Exception:
+        return ""
+
+def _graph_post_to_page_id(post_id: str) -> str:
+    try:
+        resp = requests.get(
+            f"https://graph.facebook.com/v17.0/{post_id}",
+            params={"fields": "from", "access_token": FB_TOKEN},
+            timeout=10
+        )
+        data = resp.json()
+        frm = (data or {}).get("from") or {}
+        pid = str(frm.get("id", ""))
+        return pid if pid.isdigit() else ""
+    except Exception:
+        return ""
+
+def _normalize_facebook_source_to_page_id(src: str):
+    if str(src).isdigit():
+        return src, ""
+    final_url = _resolve_share_id_to_final_url(src)
+    if final_url:
+        pid = _extract_page_id_from_url(final_url)
+        if pid:
+            return pid, f"resolved from share '{src}'"
+        pid = _graph_lookup_og_object_id(final_url)
+        if pid:
+            return pid, f"resolved via og_object from '{src}'"
+    if str(src).startswith("http"):
+        pid = _graph_lookup_og_object_id(src)
+        if pid:
+            return pid, "resolved from direct url"
+    return "", f"cannot resolve '{src}' to numeric page id"
+
+def fetch_facebook_posts(page_id_or_share: str, limit: int = 2):
+    page_id, note = _normalize_facebook_source_to_page_id(page_id_or_share)
+    if not page_id:
+        return [], f"Invalid facebook source ({note})."
     url = f"https://graph.facebook.com/v17.0/{page_id}/posts"
     try:
         r = requests.get(url, params={
@@ -41,8 +119,8 @@ def fetch_facebook_posts(page_id: str, limit: int = 2):
             "url": p.get("permalink_url", ""),
         } for p in posts if p.get("message")]
         if not data:
-            return [], "No posts (check token permission or page activity)."
-        return data, None
+            return [], f"No posts (page_id={page_id}; token scope or page activity)."
+        return data, note or None
     except Exception as e:
         return [], f"FB fetch error: {e}"
 
@@ -74,15 +152,24 @@ def crawl_social_data():
     for cfg in SOCIAL_CONFIG:
         try:
             if cfg["type"] == "facebook":
-                posts, err = fetch_facebook_posts(cfg["page_id"])
-                if err:
+                posts, note = fetch_facebook_posts(cfg["page_id"])
+                if isinstance(note, str) and note:
                     results.append({
                         "source": f"Facebook {cfg['page_id']}",
-                        "text": f"[{err}]",
+                        "text": f"[info: {note}]",
                         "url": "",
                         "time": datetime.utcnow().isoformat(),
                         "analysis": {}
                     })
+                if isinstance(note, str) and note and note.startswith("Invalid") or not posts:
+                    if not posts:
+                        results.append({
+                            "source": f"Facebook {cfg['page_id']}",
+                            "text": f"[No posts or cannot resolve] ",
+                            "url": "",
+                            "time": datetime.utcnow().isoformat(),
+                            "analysis": {}
+                        })
                 for p in posts:
                     analysis = analyze_text(p["text"])
                     results.append({
@@ -97,7 +184,7 @@ def crawl_social_data():
                 if err:
                     results.append({
                         "source": f"Substack {cfg['handle']}",
-                        "text": f"[{err}]",
+                        "text": f"[{err}] ",
                         "url": "",
                         "time": datetime.utcnow().isoformat(),
                         "analysis": {}
