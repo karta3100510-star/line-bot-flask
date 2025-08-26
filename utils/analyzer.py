@@ -1,9 +1,6 @@
-import os
-import json
-
-def ensure_analysis_file():
-    os.makedirs("data", exist_ok=True)
-    path = "data/analysis.json"
-    if not os.path.exists(path):
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump([], f, ensure_ascii=False)
+import re
+_TICKER_RE = re.compile(r"\b[A-Z]{1,5}\b")
+def analyze_text(text: str) -> dict:
+    tickers = list({m.group(0) for m in _TICKER_RE.finditer(text or "")})
+    recommend = bool(tickers) and any(k in (text or "").upper() for k in ["BUY","ADD","ACCUMULATE","看多","加碼","買進"])
+    return {"tickers": tickers[:5], "recommend": recommend, "note": "lightweight analysis (no network calls)."}
