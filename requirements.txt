@@ -6,4 +6,4 @@ requests
 beautifulsoup4
 yfinance
 pandas
-lxml>=5.2.2
+lxml
