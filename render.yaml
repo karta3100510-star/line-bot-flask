@@ -4,10 +4,3 @@ services:
     runtime: python
     buildCommand: pip install -r requirements.txt && python -m pip show gunicorn || true
     startCommand: python -m gunicorn app:app
-    envVars:
-      - key: LINE_CHANNEL_ACCESS_TOKEN
-        sync: false
-      - key: LINE_CHANNEL_SECRET
-        sync: false
-      - key: FB_PAGE_TOKEN
-        sync: false
