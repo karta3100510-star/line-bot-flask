@@ -1,3 +1,4 @@
+from utils.analysis import analyze_text
 from utils.social_crawler import crawl_social_data
 from utils.storage import save_posts, load_posts
 import yfinance as yf
