@@ -1,27 +1,34 @@
-# utils/scheduler.py
 from apscheduler.schedulers.background import BackgroundScheduler
 
-# 建議使用台北時區，也可改成 UTC
 scheduler = BackgroundScheduler(timezone="Asia/Taipei")
 
 def _job_crawl_and_analyze():
-    """
-    排程工作：先抓社群，再跑分析。
-    這裡採用「函式內延遲匯入」以避免循環匯入。
-    """
+    # 1) 先爬社群
     try:
         from utils.social_crawler import crawl_social_data
         crawl_social_data()
     except Exception as e:
         print("[scheduler] crawl_social_data failed:", e)
 
+    # 2) 再做分析（延遲匯入，避免循環）
+    analyze_data = None
     try:
-        from analyzer import analyze_data   # 若你的分析入口名稱不同，改這裡
+        from analyzer import analyze_data as _an
+        analyze_data = _an
+    except Exception:
+        try:
+            from analyzer_core import analyze_data as _an
+            analyze_data = _an
+        except Exception as e:
+            print("[scheduler] cannot import analyze_data:", e)
+            return
+
+    try:
         analyze_data()
     except Exception as e:
         print("[scheduler] analyze_data failed:", e)
 
-# 每小時執行一次
+# 每小時跑一次（以函式為目標，安全）
 try:
     scheduler.add_job(
         _job_crawl_and_analyze,
@@ -29,8 +36,8 @@ try:
         hours=1,
         id="crawl_and_analyze",
         replace_existing=True,
-        max_instances=1,  # 避免重疊
-        coalesce=True     # 若有 miss 掉的觸發，合併執行一次
+        max_instances=1,
+        coalesce=True,
     )
 except Exception as e:
     print("[scheduler] add_job error:", e)
