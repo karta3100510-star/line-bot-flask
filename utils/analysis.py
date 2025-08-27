@@ -84,18 +84,6 @@ def rule_of_thumb(q: Dict[str, Any]) -> Dict[str, Any]:
     if d1 is not None and d1 >= 0: reason.append("green day")
     return {"recommend": len(reason) >= 2, "reason": reason}
 
-def format_quote(q: Dict[str, Any]) -> str:
-    def _fmt(x, suf=""): 
-        return "-" if x is None else (f"{x:.2f}{suf}" if isinstance(x,(int,float)) else str(x))
-    s = f"{q.get('ticker','')} | ${_fmt(q.get('price'))} | 1D {_fmt(q.get('chg_1d_pct'),' %')} | 1M {_fmt(q.get('chg_1m_pct'),' %')} | PE {_fmt(q.get('pe'))}"
-    rec = rule_of_thumb(q)
-    if rec.get("recommend"):
-        s += " → ✅ 建議觀察/買入（" + ", ".join(rec.get("reason", [])) + "）"
-    else:
-        reasons = rec.get("reason", [])
-        if reasons: s += " → ⚠️ " + ", ".join(reasons)
-    return s
-
 def analyze_text(text: str) -> Dict[str, Any]:
     tickers = extract_tickers(text)
     quotes = []
