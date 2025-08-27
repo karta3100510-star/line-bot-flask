@@ -8,5 +8,5 @@ scheduler.add_job(send_daily_summary, 'cron', hour=12, minute=0, id='daily_summa
 
 
 def run_daily_analysis(*args, **kwargs):
-    from analyzer_core import analyze_data
+    from analyzer import analyze_data
     return analyze_data()
