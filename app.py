@@ -1,51 +1,158 @@
 import os
-from flask import Flask, request, abort
-from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
-from utils.scheduler import scheduler
-from analyzer import analyze_data
-from utils.notifier import send_daily_summary
-from utils.social_crawler import crawl_social_data
-import config
+import json
+import traceback
+import re
+from flask import Flask, request, abort, jsonify
 
+# ===== Flask =====
 app = Flask(__name__)
-scheduler.start()
 
-line_bot_api = LineBotApi(config.LINE_CHANNEL_ACCESS_TOKEN)
-handler = WebhookHandler(config.LINE_CHANNEL_SECRET)
+# ===== LINE SDK =====
+from linebot import LineBotApi, WebhookParser
+from linebot.exceptions import InvalidSignatureError, LineBotApiError
+from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
-@app.route("/callback", methods=['POST'])
-def callback():
-    signature = request.headers.get("X-Line-Signature", "")
-    body = request.get_data(as_text=True)
-    print("Request body:", body)
+LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
+LINE_CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET", "")
+
+_line_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN) if LINE_CHANNEL_ACCESS_TOKEN else None
+_parser = WebhookParser(LINE_CHANNEL_SECRET) if LINE_CHANNEL_SECRET else None
+
+# ===== Health Check =====
+@app.get("/healthz")
+def healthz():
+    return jsonify({"ok": True}), 200
+
+# ===== APScheduler start (safe) =====
+try:
+    from utils.scheduler import start as start_scheduler  # our scheduler exposes start()
     try:
-        handler.handle(body, signature)
-    except InvalidSignatureError:
-        abort(400)
-    return "OK"
+        start_scheduler()
+        print("[scheduler] started")
+    except Exception as e:
+        print("[scheduler] start error:", e)
+except Exception as e:
+    print("[scheduler] not configured:", e)
 
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event: MessageEvent):
-    incoming = event.message.text.strip()
-
-    if incoming.lower() == '/social':
-        results = crawl_social_data()
-        if not results:
-            reply = "目前尚未抓取到任何社群內容。"
+# ===== Helpers =====
+def _reply_text(reply_token: str, text: str):
+    try:
+        if _line_api:
+            _line_api.reply_message(reply_token, TextSendMessage(text=text))
         else:
-            lines = [f"{r['source']} → {r['data']}" for r in results]
-            reply = "\n".join(lines[:10])
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
-        return
+            print("[debug reply]", text)
+    except LineBotApiError as e:
+        print("[LineBotApiError]", e)
 
-    # Fallback: echo
-    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"You said: {incoming}"))
+def _format_social(max_items: int = 5):
+    try:
+        path = os.path.join("data", "social_posts.json")
+        if not os.path.exists(path):
+            return "目前沒有社群摘要。請先輸入 /crawl 抓取一次。"
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not data:
+            return "目前沒有社群摘要。"
+        rows = []
+        for item in data[:max_items]:
+            src = item.get("source","")
+            tm = (item.get("time","") or "")[:19]
+            tx = (item.get("text","") or "")[:80]
+            url = item.get("url","")
+            quotes = (item.get("analysis") or {}).get("quotes", [])
+            qline = ""
+            if quotes:
+                q0 = quotes[0]
+                d1 = q0.get("chg_1d_pct"); m1 = q0.get("chg_1m_pct"); pe = q0.get("pe")
+                def _fmt(x, suf=""):
+                    return "-" if x is None else (f"{x:.2f}{suf}" if isinstance(x,(int,float)) else str(x))
+                qline = f"\n↳ {q0.get('ticker','')} 1D {_fmt(d1,'%')} 1M {_fmt(m1,'%')} PE {_fmt(pe)}"
+                if q0.get("recommend"):
+                    qline += " ✅"
+            rows.append(f"{src} | {tm}\n{tx}{(' ' + url) if url else ''}{qline}")
+        return "\n\n".join(rows)[:1800]
+    except Exception as e:
+        return f"[讀取摘要失敗: {e}]"
 
-@app.route("/healthz", methods=['GET'])
-def health_check():
-    return "OK"
+_TICKER_ONLY = re.compile(r"^[A-Za-z]{1,5}$")
+
+def _handle_text_command(text: str) -> str:
+    t = (text or "").strip()
+    low = t.lower()
+
+    if low == "/social":
+        return _format_social(5)
+
+    if low == "/crawl":
+        # Lazy import to avoid cycles at startup
+        try:
+            from utils.social_crawler import crawl_social_data
+            items = crawl_social_data()
+            n = len(items) if isinstance(items, list) else 0
+            return f"已重新抓取社群內容，共 {n} 則。\n\n" + _format_social(5)
+        except Exception as e:
+            return f"[抓取失敗] {e}"
+
+    if low == "/summary":
+        try:
+            from utils import summary as _summary
+            return _summary.daily_summary_text()
+        except Exception as e:
+            return f"[摘要模組不可用] {e}\n提示：請確認 utils/summary.py 是否存在。"
+
+    if low in ("/help","help"):
+        return "指令：\n/social 查看最新社群摘要\n/crawl 立即抓取一次\n/summary 每日盤後摘要\n<股票代碼> 例如 NVDA、PLTR"
+
+    # Ticker lookup
+    if _TICKER_ONLY.match(t):
+        try:
+            from utils.analysis import fetch_quote, format_quote
+            q = fetch_quote(t.upper())
+            # If format_quote exists, use it; otherwise fallback quick format
+            try:
+                return format_quote(q)  # type: ignore
+            except Exception:
+                price = q.get("price"); d1 = q.get("chg_1d_pct"); m1 = q.get("chg_1m_pct"); pe = q.get("pe")
+                def _fmt(x, suf=""):
+                    return "-" if x is None else (f"{x:.2f}{suf}" if isinstance(x,(int,float)) else str(x))
+                return f"{q.get('ticker','')} | ${_fmt(price)} | 1D {_fmt(d1,'%')} | 1M {_fmt(m1,'%')} | PE {_fmt(pe)}"
+        except Exception as e:
+            return f"[查價失敗] {e}"
+
+    return "我在這裡～ 輸入 /help 看可用指令。"
+
+# ===== LINE Webhook =====
+@app.post("/callback")
+def callback():
+    sig = request.headers.get("X-Line-Signature", "")
+    body = request.get_data(as_text=True)
+
+    # Basic logs for debugging on Render
+    print("[/callback] signature:", sig)
+    print("[/callback] body:", body[:500])
+
+    if not _parser:
+        print("[warn] LINE secrets not configured.")
+        return "ok", 200
+
+    try:
+        events = _parser.parse(body, sig)
+    except InvalidSignatureError:
+        print("[error] InvalidSignatureError")
+        abort(400)
+
+    for ev in events:
+        try:
+            if isinstance(ev, MessageEvent) and isinstance(ev.message, TextMessage):
+                msg = _handle_text_command(ev.message.text)
+                _reply_text(ev.reply_token, msg)
+        except Exception as e:
+            print("[handler error]", e)
+            print(traceback.format_exc())
+            _reply_text(ev.reply_token, f"[發生錯誤] {e}")
+
+    return "ok", 200
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
