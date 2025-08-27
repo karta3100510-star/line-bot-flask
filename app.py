@@ -24,8 +24,9 @@ def healthz():
     return jsonify({"ok": True}), 200
 
 # ===== APScheduler start (safe) =====
+# Import only the 'start' function to avoid circular imports and premature job wiring.
 try:
-    from utils.scheduler import start as start_scheduler  # our scheduler exposes start()
+    from utils.scheduler import start as start_scheduler
     try:
         start_scheduler()
         print("[scheduler] started")
@@ -114,14 +115,15 @@ def _handle_text_command(text: str) -> str:
     if _TICKER_ONLY.match(t):
         try:
             from utils.analysis import fetch_quote
+            # 嘗試載入 format_quote（若不存在不報錯）
             try:
-                # 嘗試載入 format_quote（若不存在不報錯）
                 from utils.analysis import format_quote as _format_quote
             except Exception:
                 _format_quote = None
             q = fetch_quote(t.upper())
             if callable(_format_quote):
-                return _format_quote(q)
+                return _format_quote(q)  # type: ignore
+            # Fallback quick format
             return f"{q.get('ticker','')} | ${_fmt_num(q.get('price'))} | 1D {_fmt_num(q.get('chg_1d_pct'),' %')} | 1M {_fmt_num(q.get('chg_1m_pct'),' %')} | PE {_fmt_num(q.get('pe'))}"
         except Exception as e:
             return f"[查價失敗] {e}"
