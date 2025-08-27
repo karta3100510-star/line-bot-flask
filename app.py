@@ -44,7 +44,30 @@ def _reply_text(reply_token: str, text: str):
     except LineBotApiError as e:
         print("[LineBotApiError]", e)
 
-def _format_social(max_items: int = 5):
+def _fmt_num(x, suf=""):
+    return "-" if x is None else (f"{x:.2f}{suf}" if isinstance(x,(int,float)) else str(x))
+
+def _format_items(items, max_items: int = 5):
+    if not items: 
+        return "目前沒有社群摘要。"
+    rows = []
+    for item in items[:max_items]:
+        src = item.get("source","")
+        tm = (item.get("time","") or "")[:19]
+        tx = (item.get("text","") or "")[:80]
+        url = item.get("url","")
+        quotes = (item.get("analysis") or {}).get("quotes", []) if isinstance(item.get("analysis"), dict) else []
+        qline = ""
+        if quotes:
+            q0 = quotes[0]
+            d1 = q0.get("chg_1d_pct"); m1 = q0.get("chg_1m_pct"); pe = q0.get("pe")
+            qline = f"\n↳ {q0.get('ticker','')} 1D {_fmt_num(d1,'%')} 1M {_fmt_num(m1,'%')} PE {_fmt_num(pe)}"
+            if q0.get("recommend"):
+                qline += " ✅"
+        rows.append(f"{src} | {tm}\n{tx}{(' ' + url) if url else ''}{qline}")
+    return "\n\n".join(rows)[:1800]
+
+def _format_social_from_file(max_items: int = 5):
     try:
         path = os.path.join("data", "social_posts.json")
         if not os.path.exists(path):
@@ -53,24 +76,7 @@ def _format_social(max_items: int = 5):
             data = json.load(f)
         if not data:
             return "目前沒有社群摘要。"
-        rows = []
-        for item in data[:max_items]:
-            src = item.get("source","")
-            tm = (item.get("time","") or "")[:19]
-            tx = (item.get("text","") or "")[:80]
-            url = item.get("url","")
-            quotes = (item.get("analysis") or {}).get("quotes", [])
-            qline = ""
-            if quotes:
-                q0 = quotes[0]
-                d1 = q0.get("chg_1d_pct"); m1 = q0.get("chg_1m_pct"); pe = q0.get("pe")
-                def _fmt(x, suf=""):
-                    return "-" if x is None else (f"{x:.2f}{suf}" if isinstance(x,(int,float)) else str(x))
-                qline = f"\n↳ {q0.get('ticker','')} 1D {_fmt(d1,'%')} 1M {_fmt(m1,'%')} PE {_fmt(pe)}"
-                if q0.get("recommend"):
-                    qline += " ✅"
-            rows.append(f"{src} | {tm}\n{tx}{(' ' + url) if url else ''}{qline}")
-        return "\n\n".join(rows)[:1800]
+        return _format_items(data, max_items)
     except Exception as e:
         return f"[讀取摘要失敗: {e}]"
 
@@ -81,7 +87,7 @@ def _handle_text_command(text: str) -> str:
     low = t.lower()
 
     if low == "/social":
-        return _format_social(5)
+        return _format_social_from_file(5)
 
     if low == "/crawl":
         # Lazy import to avoid cycles at startup
@@ -89,7 +95,8 @@ def _handle_text_command(text: str) -> str:
             from utils.social_crawler import crawl_social_data
             items = crawl_social_data()
             n = len(items) if isinstance(items, list) else 0
-            return f"已重新抓取社群內容，共 {n} 則。\n\n" + _format_social(5)
+            # 直接用回傳結果渲染，避免某些版本沒有寫入檔案
+            return f"已重新抓取社群內容，共 {n} 則。\n\n" + _format_items(items, 5)
         except Exception as e:
             return f"[抓取失敗] {e}"
 
@@ -106,16 +113,16 @@ def _handle_text_command(text: str) -> str:
     # Ticker lookup
     if _TICKER_ONLY.match(t):
         try:
-            from utils.analysis import fetch_quote, format_quote
-            q = fetch_quote(t.upper())
-            # If format_quote exists, use it; otherwise fallback quick format
+            from utils.analysis import fetch_quote
             try:
-                return format_quote(q)  # type: ignore
+                # 嘗試載入 format_quote（若不存在不報錯）
+                from utils.analysis import format_quote as _format_quote
             except Exception:
-                price = q.get("price"); d1 = q.get("chg_1d_pct"); m1 = q.get("chg_1m_pct"); pe = q.get("pe")
-                def _fmt(x, suf=""):
-                    return "-" if x is None else (f"{x:.2f}{suf}" if isinstance(x,(int,float)) else str(x))
-                return f"{q.get('ticker','')} | ${_fmt(price)} | 1D {_fmt(d1,'%')} | 1M {_fmt(m1,'%')} | PE {_fmt(pe)}"
+                _format_quote = None
+            q = fetch_quote(t.upper())
+            if callable(_format_quote):
+                return _format_quote(q)
+            return f"{q.get('ticker','')} | ${_fmt_num(q.get('price'))} | 1D {_fmt_num(q.get('chg_1d_pct'),' %')} | 1M {_fmt_num(q.get('chg_1m_pct'),' %')} | PE {_fmt_num(q.get('pe'))}"
         except Exception as e:
             return f"[查價失敗] {e}"
 
