@@ -59,18 +59,18 @@ def fetch_quote(ticker: str) -> Dict[str, Any]:
             last = float(d["Close"].iloc[-1])
             prev = float(d["Close"].iloc[-2]) if len(d) >= 2 else None
             info["price"] = last
-            info["chg_1d_pct"] = None if prev in (None, 0) else (last - prev) / prev * 100.0
+            info["chg_1d_pct"] = _pct(prev, last) if prev is not None else None
         m = t.history(period="1mo", interval="1d", auto_adjust=False)
         if not m.empty:
             first = float(m["Close"].iloc[0]); lastm = float(m["Close"].iloc[-1])
-            info["chg_1m_pct"] = None if first in (None, 0) else (lastm - first) / first * 100.0
+            info["chg_1m_pct"] = _pct(first, lastm)
         pe = None
         try:
-            fi = getattr(t, "fast_info", {}); pe = fi.get("trailingPe")
-        except Exception: pass
+            fi = getattr(t, "fast_info", {}); pe = float(fi.get("trailingPe"))
+        except Exception: pe = None
         if pe is None:
-            try: pe = getattr(t, "info", {}).get("trailingPE")
-            except Exception: pass
+            try: pe = float(getattr(t, "info", {}).get("trailingPE"))
+            except Exception: pe = None
         info["pe"] = pe
     except Exception as e:
         info["error"] = f"{type(e).__name__}: {e}"
