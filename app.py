@@ -3,7 +3,9 @@ from flask import Flask, request
 from linebot.v3 import WebhookHandler
 from linebot.v3.messaging import MessagingApi, ReplyMessageRequest, TextMessage
 from linebot.v3.webhooks import Parser, MessageEvent, TextMessageContent
+
 from analysis_pipeline import run_full_analysis
+from utils.scheduler_fix import start as scheduler_start, diagnostics as scheduler_diag
 
 app = Flask(__name__)
 
@@ -16,6 +18,14 @@ api = MessagingApi(channel_access_token=CHANNEL_TOKEN)
 @app.route("/healthz", methods=["GET"])
 def healthz():
     return "ok", 200
+
+@app.route("/debug", methods=["GET"])
+def debug():
+    try:
+        info = scheduler_diag()
+    except Exception as e:
+        info = {"error": str(e)}
+    return "\n".join(f"{k}: {v}" for k, v in info.items()), 200
 
 @app.route("/callback", methods=["POST"])
 def callback():
@@ -46,4 +56,6 @@ def callback():
     return "OK", 200
 
 if __name__ == "__main__":
+    # 明確啟動 Scheduler（熱修復版不會在 import 時啟動）
+    scheduler_start()
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
