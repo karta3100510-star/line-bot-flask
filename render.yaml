@@ -1,6 +1,17 @@
 services:
   - type: web
-    name: stock-tracker-bot
-    runtime: python
-    buildCommand: pip install -r requirements.txt && python -m pip show gunicorn || true
+    name: linebot-analysis
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && pip show gunicorn || true
     startCommand: python -m gunicorn app:app
+    envVars:
+      - key: LINE_CHANNEL_SECRET
+        sync: false
+      - key: LINE_CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: FINNHUB_TOKEN
+        sync: false
+      - key: ALPHAVANTAGE_KEY
+        sync: false
+    healthCheckPath: /healthz
