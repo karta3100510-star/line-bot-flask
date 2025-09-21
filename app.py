@@ -56,6 +56,5 @@ def callback():
     return "OK", 200
 
 if __name__ == "__main__":
-    # 明確啟動 Scheduler（熱修復版不會在 import 時啟動）
     scheduler_start()
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
