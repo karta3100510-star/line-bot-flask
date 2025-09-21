@@ -1,9 +1,9 @@
 flask
-line-bot-sdk
-apscheduler
-gunicorn
-requests
-beautifulsoup4
-yfinance
+line-bot-sdk==3.*
 pandas
-lxml>=5.2.2
+numpy
+pandas_ta
+yahooquery
+requests
+python-dateutil
+gunicorn
